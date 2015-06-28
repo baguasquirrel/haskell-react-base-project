@@ -1,0 +1,36 @@
+---
+# Gather packages
+- hosts: all
+  sudo: yes
+  gather_facts: no
+  tasks:
+  - name: npm install gulp
+    shell: npm install --save-dev gulp chdir=/fallingwater/web
+
+  - name: npm install gulp-uglify
+    shell: npm install --save-dev gulp-uglify chdir=/fallingwater/web
+
+  - name: npm install gulp-react
+    shell: npm install --save-dev gulp-react chdir=/fallingwater/web
+
+  - name: npm install gulp-html-replace
+    shell: npm install --save-dev gulp-html-replace chdir=/fallingwater/web
+
+  - name: npm install gulp-logger
+    shell: npm install --save-dev gulp-logger chdir=/fallingwater/web
+
+  - name: npm install vinyl-source-stream
+    shell: npm install --save-dev vinyl-source-stream chdir=/fallingwater/web
+
+  - name: npm install browserify
+    shell: npm install --save-dev browserify chdir=/fallingwater/web
+
+  - name: npm install watchify
+    shell: npm install --save-dev watchify chdir=/fallingwater/web
+
+  - name: npm install reactify
+    shell: npm install --save-dev reactify chdir=/fallingwater/web
+
+  - name: npm install gulp-streamify
+    shell: npm install --save-dev gulp-streamify chdir=/fallingwater/web
+

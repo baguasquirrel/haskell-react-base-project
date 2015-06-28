@@ -1,0 +1,349 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+# (c) 2014, Parnell Springmeyer <parnell@ixmat.us>
+
+import traceback
+import os
+import sys
+import datetime
+import fnmatch
+
+DOCUMENTATION = '''
+---
+module: cabal
+short_description: Manage Haskell packages.
+description:
+  - "Manage Haskell package dependencies. This module only supports basic cabal operations and some ghc-pkg operations to provide a consistent ops interface."
+  - "Be careful to install executables vs. libraries! `cabal install snap` installs the snap executable WITH its dependencies `snap-core` and others. Executables should be installed by the system package manager.
+version_added: "0.8"
+options:
+  name:
+    description:
+      - The name of a Cabal package to install.
+    required: false
+    default: null
+  version:
+    description:
+      - The version to install.
+    required: false
+    default: null
+  db:
+    description:
+      - Specify an alternate package db
+    required: false
+    default: null
+  compiler:
+    description:
+      - Specify an alternate compiler path
+    required: false
+    default: null
+  update_cache:
+    description:
+      - Update Cabal's package cache
+    required: false
+    default: null
+  local:
+    description:
+      - Enable per-user installation
+    required: false
+    default: true
+  solver:
+    description:
+      - Dependency solver
+    required: false
+    default: choose
+  documentation:
+    description:
+      - Disable / enable building of documentation
+    required: false
+    default: false
+  reinstall:
+    description:
+      - Reinstall even if it means installing the same version again
+    required: false
+    default: false
+  force_reinstalls:
+    description:
+      - Force reinstalls even if it will most likely break other installed packages
+    required: false
+    default: false
+  upgrade_deps:
+    description:
+      - Pick the latest version for all dependencies
+    required: false
+    default: false
+  only_deps:
+    description:
+      - Only install the package's dependencies
+    required: false
+    default: null
+  jobs:
+    description:
+      - Run N jobs simultaneously
+    required: false
+    default: null
+  state:
+    description:
+      - The state of module
+    required: false
+    default: present
+    choices: [ "present", "absent", "latest", "register", "unregister (same as absent)", "expose", "hide" ]
+  extra_args:
+    description:
+      - Extra arguments passed to cabal.
+    required: false
+    default: null
+  executable:
+    description:
+      - The explicit executable or a pathname to the Cabal executable
+    required: false
+    default: /usr/bin/cabal
+  ghc_pkg:
+    description:
+      - The explicit executable or a pathname to the ghc-pkg program
+    required: false
+    default: /usr/bin/ghc-pkg
+requirements: [ "ghc", "cabal-install" ]
+author: Parnell Springmeyer
+'''
+
+EXAMPLES = '''
+# Install (Snap) Cabal package.
+- cabal: name=snap update_cache=yes
+
+# Install (Snap) cabal package on version 0.9.
+- cabal: name="snap==0.13.*"
+
+# Install (Snap) cabal package less than version 0.9.
+- cabal: name="snap<0.9" local=False only_deps=True
+'''
+
+
+def _fail(module, cmd, out, err):
+    msg = ''
+    if out:
+        msg += "stdout: {}".format(out)
+    if err:
+        msg += "\n:stderr: {}".format(err)
+    module.fail_json(cmd=cmd, msg=msg)
+
+
+def _get_cmd_options(module, cmd):
+    thiscmd = cmd + " --help"
+    rc, stdout, stderr = module.run_command(thiscmd)
+    if rc != 0:
+        module.fail_json(
+            msg="Could not get output from {}: {}".format(thiscmd, stdout + stderr))
+
+    words = stdout.strip().split()
+    cmd_options = [x for x in words if x.startswith('--')]
+    return cmd_options
+
+
+def _get_full_name(name, version=None):
+    if version is None:
+        resp = name
+    else:
+        resp = name + '==' + version
+    return resp
+
+
+def _get_cabal(module, executable=None):
+    # We know cabal is either in the user's home directory or in a
+    # global location
+    cabal = None
+    if executable is not None:
+        cabal = executable
+
+    if cabal is None:
+        opt_dirs = ['/usr/local/bin', '/usr/bin',
+                    '/bin', '/opt/bin', '/opt/local/bin']
+        cabal = module.get_bin_path("cabal", False, opt_dirs)
+
+    if cabal is None:
+        module.fail_json(msg='could not find cabal executable')
+
+    return cabal
+
+
+def _get_ghcpkg(module, executable=None):
+    ghcpkg = None
+
+    if executable is not None:
+        ghcpkg = executable
+
+    if ghcpkg is None:
+        opt_dirs = ['/usr/local/bin', '/usr/bin',
+                    '/bin', '/opt/bin', '/opt/local/bin']
+        ghcpkg = module.get_bin_path("ghc-pkg", False, opt_dirs)
+
+    if ghcpkg is None:
+        module.fail_json(msg='could not find ghc-pkg executable')
+
+    return ghcpkg
+
+
+def update_package_db(module, exe):
+    """ Updates the cabal package cache. """
+
+    rc, out, err = module.run_command("{} update".format(exe))
+
+    if rc != 0:
+        module.fail_json(msg="could not update package db")
+
+
+def install_package(module, exe, ghcpkg, package, version):
+    """ Installs one or more packages. """
+
+    p = module.params
+
+    only_deps = " --only-dependencies " if p['only_deps'] else ""
+    upgrade_deps = " --upgrade-dependencies " if p['upgrade_deps'] else ""
+    local = " --user " if p['local'] else " --global "
+    solver = " --solver={}".format(p['solver']) if p['solver'] else ""
+    pkg_db = " --package-db={}".format(p['db']) if p['db'] else ""
+    compiler = " --with-compiler={}".format(p['compiler']
+                                            ) if p['compiler'] else ""
+    reinstall = " --reinstall " if p['reinstall'] else ""
+    force_reinstalls = " --force-reinstalls " if p['force_reinstalls'] else ""
+    jobs = " --jobs={}".format(p['jobs']) if p['jobs'] else ""
+    extra_args = p['extra_args'] if p['extra_args'] else ""
+    docs = " --enable-documentation " if p['documentation'] else " --disable-documentation "
+
+    vsn = "-{}".format(version) if version else ""
+    pkg = package + vsn
+
+    if not reinstall and query_package(module, ghcpkg, package, version):
+        module.exit_json(changed=False,
+                         msg="{} is already installed".format(pkg))
+
+    args = dict(prog=exe,
+                pkg=pkg,
+                only_deps=only_deps,
+                upgrade_deps=upgrade_deps,
+                local=local,
+                solver=solver,
+                pkg_db=pkg_db,
+                reinstall=reinstall,
+                force_reinstalls=force_reinstalls,
+                jobs=jobs,
+                docs=docs,
+                compiler=compiler,
+                extra_args=extra_args
+                )
+
+    rc, out, err = module.run_command(
+        "{prog} install {pkg} {only_deps} {upgrade_deps} {local} {solver} {pkg_db} {reinstall} {force_reinstalls} {jobs} {docs} {compiler} {extra_args}".format(**args))
+
+    if (rc != 0) and ("All the requested packages are already installed" not in err):
+        module.fail_json(
+            msg="error installing {}: {}".format(pkg, err))
+
+    if only_deps:
+        if rc == 0:
+            module.exit_json(changed=True,
+                             msg="installed {} dependencies".format(pkg))
+
+    if not query_package(module, ghcpkg, package, version):
+        module.fail_json(
+            msg="failed to install {}: {}".format(pkg, out))
+    else:
+        module.exit_json(changed=True,
+                         msg="installed {}".format(pkg))
+
+
+def unregister_package(module, exe, package, version):
+    """ Installs one or more packages. """
+
+    p = module.params
+    local = "--global" if not p['local'] else "--user"
+    version = "-{}".format(version) if version else ""
+    pkg = package + version
+    rc, out, err = module.run_command(
+        "{exe} unregister {pkg} {local}".format(exe=exe, pkg=pkg, local=local))
+
+    if rc != 0:
+        module.fail_json(msg=err)
+
+    if query_package(module, exe, package, version):
+        module.fail_json(
+            msg="failed to unregister {}: {}".format(pkg, out))
+    else:
+        module.exit_json(changed=True,
+                         msg="unregistered {}".format(pkg))
+
+
+def query_package(module, exe, name, version=False):
+    """ Returns whether a package is installed or not. """
+
+    p = module.params
+    local = "--global" if not p['local'] else "--user"
+    version = "-{}".format(version) if version else ""
+    rc, out, err = module.run_command(
+        "{exe} list {pkg}{version} {local}".format(exe=exe, pkg=name, version=version, local=local))
+
+    pkg = name + version
+    return (pkg in out)
+
+
+def main():
+    state_map = dict(
+        present='install',
+        absent='unregister',
+        register='register',
+        expose='expose',
+        hide='hide',
+        latest='install',
+    )
+
+    module = AnsibleModule(
+        argument_spec=dict(
+            state=dict(default='present', choices=state_map.keys()),
+            name=dict(default=None, required=False),
+            version=dict(default=None, required=False),
+            only_deps=dict(default=False, required=False, type='bool'),
+            upgrade_deps=dict(default=False, required=False, type='bool'),
+            reinstall=dict(default=False, required=False, type='bool'),
+            force_reinstalls=dict(default=False, required=False, type='bool'),
+            local=dict(default=True, required=False, type='bool'),
+            solver=dict(default=None, required=False),
+            documentation=dict(default=False, required=False, type='bool'),
+            jobs=dict(default=None, required=False, type='int'),
+            db=dict(default=None, required=False),
+            compiler=dict(default=None, required=False),
+            extra_args=dict(default=None, required=False),
+            chdir=dict(default=None, required=False),
+            executable=dict(default="/usr/bin/cabal", required=False),
+            ghc_pkg=dict(default="/usr/bin/ghc-pkg", required=False),
+            update_cache=dict(default=False, required=False, type='bool'),
+        ),
+        required_one_of=[['name', 'update_cache']],
+        mutually_exclusive=[['only_dependencies', 'upgrade_deps']],
+        supports_check_mode=True
+    )
+
+    p = module.params
+
+    pkg = p["name"]
+    cache = p['update_cache']
+
+    cabal = _get_cabal(module, p['executable'])
+    ghcpkg = _get_ghcpkg(module, p['ghc_pkg'])
+
+    if cache:
+        update_package_db(module, cabal)
+
+    if pkg and p['state'] == 'present':
+        install_package(module, cabal, ghcpkg, pkg, p['version'])
+
+    if pkg and p['state'] == 'absent':
+        unregister_package(module, ghcpkg, pkg, p['version'])
+
+    module.exit_json(changed=changed, cmd=cmd, name=name,
+                     state=state, stdout=out, stderr=err)
+
+# import module snippets
+from ansible.module_utils.basic import *
+
+main()

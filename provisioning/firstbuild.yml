@@ -1,0 +1,25 @@
+---
+# Gather packages
+- hosts: all
+  tasks:
+  - name: stack setup
+    shell: stack setup chdir=/fallingwater/haskell
+
+  - name: stack build
+    shell: stack build chdir=/fallingwater/haskell
+
+  - name: add ghc to path (permanent)
+    shell: {{ item }}
+    with_items:
+    - echo "" >> ~/.profile
+    - echo "export PATH=\$PATH:/home/vagrant/.stack/programs/x86_64-linux/ghc-7.8.4/bin" >> ~/.profile
+    - echo "" >> ~/.profile
+
+  - name: setup logging
+    shell: mkdir -p log chdir=/fallingwater/haskell
+
+  - name: touch access.log
+    shell: touch /fallingwater/haskell/log/access.log
+
+  - name: touch error.log
+    shell: touch /fallingwater/haskell/log/error.log

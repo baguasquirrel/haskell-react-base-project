@@ -1,0 +1,26 @@
+---
+# Gather packages
+- hosts: all
+  sudo: yes
+  gather_facts: no
+  tasks:
+  - name: ensure webpack is installed
+    npm: name=webpack global=yes
+
+  - name: get gulp
+    npm: name=gulp global=yes
+
+  - name: get browserify
+    npm: name=browserify global=yes
+
+  - name: get react
+    npm: name=react global=yes
+
+  - name: get react-tools
+    npm: name=react-tools global=yes
+
+  - name: make sure user perms are correct
+    shell: chown -R vagrant ~/.npm
+
+  - name: make sure group perms are correct
+    shell: chown -R vagrant ~/.npm

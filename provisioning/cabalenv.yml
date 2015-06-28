@@ -1,0 +1,4 @@
+- hosts: all
+  tasks:
+  - name: install Snap
+    cabal: name=snap state=present

@@ -1,0 +1,45 @@
+- hosts: all
+  tasks:
+  - name: install bytestring
+    cabal: name=bytestring state=present reinstall=True force_reinstalls=True
+
+  - name: install binary
+    cabal: name=binary state=present reinstall=True force_reinstalls=True
+
+  - name: reinstall text
+    cabal: name=text state=present reinstall=True force_reinstalls=True
+
+  - name: reinstall parsec
+    cabal: name=parsec state=present reinstall=True
+
+  - name: reinstall network-uri
+    cabal: name=network-uri state=present reinstall=True
+
+  - name: reinstall HTTP
+    cabal: name=HTTP state=present reinstall=True
+
+  # - name: reinstall Cabal
+  #   cabal: name=Cabal reinstall=true
+
+  # - name: reinstall mtl
+  #   cabal: name=mtl reinstall=true
+
+  # - name: reinstall network
+  #   cabal: name=network reinstall=true
+
+  # - name: reinstall random
+  #   cabal: name=random reinstall=true
+
+  # - name: reinstall stm
+  #   cabal: name=stm reinstall=true
+
+  # - name: reinstall transformers
+  #   cabal: name=transformers reinstall=true
+
+  # - name: reinstall zlib
+  #   cabal: name=zlib reinstall=true
+
+  # will need to reinstall parsec, network-uri and HTTP after installing aeson
+  # - name: install aeson
+  #   cabal: name=aeson state=present force_reinstalls=true
+

@@ -1,0 +1,24 @@
+{
+  "name": "fallingwater",
+  "version": "0.0.0",
+  "description": "la dee la",
+  "main": "app.js",
+  "scripts": {
+    "test": "blargh"
+  },
+  "author": "coding.squirrel",
+  "license": "BSD3",
+  "devDependencies": {
+    "browserify": "^10.2.4",
+    "gulp": "^3.9.0",
+    "gulp-concat": "^2.6.0",
+    "gulp-html-replace": "^1.5.0",
+    "gulp-react": "^3.0.1",
+    "gulp-streamify": "0.0.5",
+    "gulp-uglify": "^1.2.0",
+    "reactify": "^1.1.1",
+    "vinyl-source-stream": "^1.1.0",
+    "watchify": "^3.2.3"
+  },
+  "repository": "git@github.com:baguasquirrel/fallingwater.git"
+}

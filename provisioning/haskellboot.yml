@@ -1,0 +1,11 @@
+- hosts: all
+  sudo: yes
+  tasks:
+    - name: get fpcomplete apt key
+      shell: wget -q -O- http://download.fpcomplete.com/ubuntu/fpco.key | apt-key add -
+
+    - name: get fpcomplete apt repo
+      shell: echo 'deb http://download.fpcomplete.com/ubuntu/vivid stable main' | tee /etc/apt/sources.list.d/fpco.list
+
+    - name: install stack
+      apt: stack state=present update_cache=yes
